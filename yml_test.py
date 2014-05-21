@@ -441,7 +441,7 @@ class YMLTest(unittest.TestCase):
  
           
         # конец теста
-        assert stat==0, (u'Errors:%d')%(stat)
+        assert stat==0, (u'Errors: %d\nDPD: %s')%(stat,DPD)
     
     def test_yml_3(self):
         """  проверка корректности ( доступности ) ссылки на товар (полный перебор тест длится около 4 часов)"""
