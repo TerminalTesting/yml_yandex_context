@@ -163,6 +163,12 @@ class YMLTest(unittest.TestCase):
             
             delivery_tag=element.find('delivery')
 
+            off_url = element.find('url').text
+            DPD = '%3Fdcid%3D' in off_url
+            if DPD:
+                DPDcity = int(off_url[off_url.find('%3Fdcid%3D')+10:off_url.find('%26')])#поиск параметра id города и преобразование в integer
+            
+
             cnt+=1
             # получаем параметры товара из БД
             item=session.query( Goods, Goods_stat, Region, Goods_price, Goods_section,
@@ -210,6 +216,14 @@ class YMLTest(unittest.TestCase):
                 print 'ID товара: ', element.attrib['id'] ,' Цена у данного товара равна нулю. '
                 print '-'*80
 
+            elif item[1].status == 5 and DPD != True:
+                item_price = item[3].price_supplier
+                if int(float(price_tag.text))!= int(item_price):
+                    stat+=1
+                    print 'Ошибка в теге <PRICE>: Цена поставщика'
+                    print 'ID товара: ', element.attrib['id'] ,' значение в файле:',int(float(price_tag.text)), ' значение в базе данных:', int(item_price)
+                    print '-'*80
+
             else:
                 actions_goods = session.query(Action_goods).group_by(Action_goods.action_id).\
                                                             filter(Action_goods.goods_id == item[0].id).\
@@ -230,22 +244,23 @@ class YMLTest(unittest.TestCase):
                             action_price = action_price[0][0]
                             main_price = item[3].price if item[1].status != 5 else item[3].price_supplier
 
-                            if int(action_price) > int(main_price) and actions_goods[0].action_id not in (13,):
-                                item_price = main_price
-                            elif int(action_price) < int(main_price) and actions_goods[0].action_id in (13,):
-                                item_price = main_price
-                            else:
-                                item_price = action_price
+                            #if int(action_price) > int(main_price) and actions_goods[0].action_id not in (13,):
+                            #    item_price = main_price
+                            #elif int(action_price) < int(main_price) and actions_goods[0].action_id in (13,):
+                            #    item_price = main_price
+                            #else:
+                            #    item_price = action_price
 
 
-                            if int(float(price_tag.text)) != int(item_price):
-                                stat+=1
-                                print 'Ошибка в теге <PRICE>: ЦЕНА АКЦИОННАЯ'
-                                print 'ID товара: ', element.attrib['id'] ,' значение в файле:', int(float(price_tag.text)), ' значение в базе данных:', int(item_price)
-                                print '-'*80
+                            if action_price < main_price and actions_goods[0].action_id not in (13,) and int(action_price) != 0:
+                                if int(float(price_tag.text)) != int(action_price):
+                                    stat+=1
+                                    print 'Ошибка в теге <PRICE>: ЦЕНА АКЦИОННАЯ'
+                                    print 'ID товара: ', element.attrib['id'] ,' значение в файле:', int(float(price_tag.text)), ' значение в базе данных:', int(action_price)
+                                    print '-'*80
 
                         else:
-                            item_price = item[3].price if item[1].status != 5 else item[3].price_supplier            
+                            item_price = item[3].price          
                             if int(float(price_tag.text))!= int(item_price):
                                 stat+=1
                                 print 'Ошибка в теге <PRICE>:'
@@ -254,7 +269,7 @@ class YMLTest(unittest.TestCase):
 
                        
                     else:
-                        item_price = item[3].price if item[1].status != 5 else item[3].price_supplier            
+                        item_price = item[3].price           
                         if int(float(price_tag.text))!= int(item_price):
                     
                             stat+=1
@@ -264,7 +279,7 @@ class YMLTest(unittest.TestCase):
 
 
                 else:
-                    item_price = item[3].price if item[1].status != 5 else item[3].price_supplier            
+                    item_price = item[3].price            
                     if int(float(price_tag.text))!= int(item_price):
                     
                         stat+=1
@@ -276,7 +291,11 @@ class YMLTest(unittest.TestCase):
 
 
             #тег статуса <available>
-            if (element.attrib['available'] in ('true', 'True') ) != ( item[1].status==1 ):
+            if DPD == True:
+                item_available = False
+            else:
+                item_available = ( item[1].status==1 )
+            if (element.attrib['available'] in ('true', 'True') ) != item_available:
                 stat+=1
                 print 'Ошибка в теге <AVAILABLE>:'
                 print 'ID товара: ', element.attrib['id'] ,' значение в файле:',element.attrib['available'], ' значение в базе данных:',item[1].status==1, item[1].status
@@ -284,39 +303,41 @@ class YMLTest(unittest.TestCase):
                 
             #тег самовывоза <pickup>, может быть разным при разной габаритности и насткойках инфоблоков
             #не учтены маловероятные варианты, например, если в регионе 2 магазина и в настройках их обоих запрещен вывод МГТ и т.д. В настоящий момент на сайте нигде это не используется
-            pickup=True
-
-            if int( item[8] ) > 0:#если габаритность переопределена в карточке товара, 1 - обычная, 2 - крупногабаритный
-                if int( item[8] )==1 and ((0,) not in no_self_delivery[0]):
-                    pickup=False
-                if int( item[8] )==2 and ((0,) not in no_self_delivery[1]):
-                    pickup=False
-                if int( item[8] )==2 and item[9] == 1:
-                    pickup=False
-                if len(no_self_delivery[0])==1 and int( item[8] )==1:
-                    nomgt = session.query(Shops_block.block_id).\
-                                          join(Shops, Shops_block.shop_id==Shops.id).\
-                                          join(Region, Shops.city_id==Region.id).\
-                                          filter(Region.domain==DOMAIN).\
-                                          all()
-                    if nomgt == True and int(item[10]) in nomgt:
-                        pickup=False
-                    
+            if DPD == True:
+                pickup = False
             else:
-                if int( item[6] )==1 and ((0,) not in no_self_delivery[0]):
-                    pickup=False
-                if int( item[6] )==2 and ((0,) not in no_self_delivery[1]):
-                    pickup=False
-                if int( item[6] )==2 and item[9] == 1:
-                    pickup=False
-                if len(no_self_delivery[0])==1 and int( item[6] )==1:
-                    nomgt = session.query(Shops_block.block_id).\
+                pickup=True
+                if int( item[8] ) > 0:#если габаритность переопределена в карточке товара, 1 - обычная, 2 - крупногабаритный
+                    if int( item[8] )==1 and ((0,) not in no_self_delivery[0]):
+                        pickup=False
+                    if int( item[8] )==2 and ((0,) not in no_self_delivery[1]):
+                        pickup=False
+                    if int( item[8] )==2 and item[9] == 1:
+                        pickup=False
+                    if len(no_self_delivery[0])==1 and int( item[8] )==1:
+                        nomgt = session.query(Shops_block.block_id).\
                                           join(Shops, Shops_block.shop_id==Shops.id).\
                                           join(Region, Shops.city_id==Region.id).\
                                           filter(Region.domain==DOMAIN).\
                                           all()
-                    if nomgt == True and int(item[10]) in nomgt:
+                        if nomgt == True and int(item[10]) in nomgt:
+                            pickup=False
+                    
+                else:
+                    if int( item[6] )==1 and ((0,) not in no_self_delivery[0]):
                         pickup=False
+                    if int( item[6] )==2 and ((0,) not in no_self_delivery[1]):
+                        pickup=False
+                    if int( item[6] )==2 and item[9] == 1:
+                        pickup=False
+                    if len(no_self_delivery[0])==1 and int( item[6] )==1:
+                        nomgt = session.query(Shops_block.block_id).\
+                                          join(Shops, Shops_block.shop_id==Shops.id).\
+                                          join(Region, Shops.city_id==Region.id).\
+                                          filter(Region.domain==DOMAIN).\
+                                          all()
+                        if nomgt == True and int(item[10]) in nomgt:
+                            pickup=False
                     
             if (pickup_tag.text in ('true', 'True') ) != pickup:
                    
@@ -327,7 +348,11 @@ class YMLTest(unittest.TestCase):
               
                 
             #тег склад <store>
-            if (store_tag.text in ('true', 'True') ) != ( item[1].status==1 ):
+            if DPD == True:
+                in_store = False
+            else:
+                in_store = ( item[1].status==1 )
+            if (store_tag.text in ('true', 'True') ) != in_store:
                 stat+=1
                 print 'Ошибка в теге <STORE>:'
                 print 'ID товара: ', element.attrib['id'] ,' значение в файле:', store_tag.text, ' значение в базе данных:', item[1].status==1, item[1].status
@@ -377,21 +402,42 @@ class YMLTest(unittest.TestCase):
 
                 #цена доставки определена в товаре или для магазина
                 else:
-                    if int( item[8] ) > 0:
-                        if  ( float(delivery_price_tag.text) not in delivery_price[ int( item[8] ) ] ): 
+                    if DPD == True:
+                        logic_weight = int(item[0].logic_weight) #+ (1 if item[0].logic_weight%1 != False else 0) максимальный вес не включен, т.е. при весе 5 берется значение из 15
+                        cost = session.query(Rates.cost).\
+                                      filter(Rates.city_id == DPDcity).\
+                                      filter(Rates.max_weight > logic_weight).first()
+                        if cost:
+                            cost = cost[0]#tuple is result of query
+                            if int(delivery_price_tag.text) != cost: 
+                                stat+=1
+                                print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
+                                print 'Цена доставки не соответствует'
+                                print 'ID товара: ', element.attrib['id'] ,' значение в файле:', delivery_price_tag.text, ' значение в базе данных:', cost
+                                print '-'*80
+                        else:
                             stat+=1
                             print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
-                            print 'Цена доставки определена в товаре или для магазина'
-                            print 'ID товара: ', element.attrib['id'] ,' значение в базе данных:', delivery_price_tag.text, ' тип доставки(1-МГТ, 2-КГТ):', int( item[8] )
+                            print 'Цена доставки не найдена в БД'
+                            print 'ID товара: ', element.attrib['id']
                             print '-'*80
                             
                     else:
-                        if  ( float(delivery_price_tag.text) not in delivery_price[ int( item[6] ) ] ): 
-                            stat+=1
-                            print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
-                            print 'Цена доставки определена в товаре или для магазина'
-                            print 'ID товара: ', element.attrib['id'] ,' значение в базе данных:', delivery_price_tag.text, ' тип доставки(1-МГТ, 2-КГТ):', int( item[6] )
-                            print '-'*80
+                        if int( item[8] ) > 0:
+                            if  ( float(delivery_price_tag.text) not in delivery_price[ int( item[8] ) ] ): 
+                                stat+=1
+                                print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
+                                print 'Цена доставки определена в товаре или для магазина'
+                                print 'ID товара: ', element.attrib['id'] ,' значение в базе данных:', delivery_price_tag.text, ' тип доставки(1-МГТ, 2-КГТ):', int( item[8] )
+                                print '-'*80
+                            
+                        else:
+                            if  ( float(delivery_price_tag.text) not in delivery_price[ int( item[6] ) ] ): 
+                                stat+=1
+                                print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
+                                print 'Цена доставки определена в товаре или для магазина'
+                                print 'ID товара: ', element.attrib['id'] ,' значение в базе данных:', delivery_price_tag.text, ' тип доставки(1-МГТ, 2-КГТ):', int( item[6] )
+                                print '-'*80
  
           
         # конец теста
