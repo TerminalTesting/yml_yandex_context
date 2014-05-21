@@ -11,6 +11,7 @@ import os
 from yml_models import *
 from string import split
 from urlparse import urlparse
+from sqlalchemy.sql.expression import func
 
 def get_domain(url):
     """  найти домен региона """
@@ -413,14 +414,26 @@ class YMLTest(unittest.TestCase):
                                 stat+=1
                                 print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
                                 print 'Цена доставки не соответствует'
-                                print 'ID товара: ', element.attrib['id'] ,' значение в файле:', delivery_price_tag.text, ' значение в базе данных:', cost
+                                print 'ID товара: ', element.attrib['id'] ,' значение в файле:', delivery_price_tag.text, ' значение в базе данных:', int(cost)
                                 print '-'*80
+                                
                         else:
-                            stat+=1
-                            print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
-                            print 'Цена доставки не найдена в БД'
-                            print 'ID товара: ', element.attrib['id']
-                            print '-'*80
+                            cost = session.query(func.max(Rates.cost)).\
+                                      filter(Rates.city_id == DPDcity).first()
+                            if cost:
+                                cost = cost[0]#tuple is result of query
+                                if int(delivery_price_tag.text) != int(cost): 
+                                    stat+=1
+                                    print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
+                                    print 'Цена доставки не соответствует'
+                                    print 'ID товара: ', element.attrib['id'] ,' значение в файле:', delivery_price_tag.text, ' значение в базе данных:', int(cost)
+                                    print '-'*80
+                            else:
+                                stat+=1
+                                print 'Ошибка в теге <LOCAL_DELIVERY_COST>:'
+                                print 'Цена доставки не найдена в БД'
+                                print 'ID товара: ', element.attrib['id']
+                                print '-'*80
                             
                     else:
                         if int( item[8] ) > 0:
