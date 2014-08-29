@@ -174,14 +174,16 @@ class YMLTest(unittest.TestCase):
             # получаем параметры товара из БД
             item=session.query( Goods, Goods_stat, Region, Goods_price, Goods_section,
                                 Goods_block.name, Goods_block.delivery_type, Goods_block.flag_self_delivery,
-                                Goods.overall_type, Goods_block.flag_permit_delivery, Goods_block.id ).\
+                                Goods.overall_type, Goods_block.flag_permit_delivery, Goods_block.id, Supplier_price ).\
                                 join(Goods_stat, Goods.id==Goods_stat.goods_id).\
                                 join(Goods_price, (Goods.id==Goods_price.goods_id)  ).\
                                 join(Goods_section, (Goods_section.guid==Goods.section_guid)  ).\
                                 join(Goods_block, (Goods_block.id==Goods.block_id) ).\
+                                join(Supplier_price, Supplier_price.goods_id == Goods.id).\
                                 filter(Goods.id==element.attrib['id']).\
                                 filter(Region.domain==DOMAIN).\
                                 filter( (Goods_stat.city_id== Region.id) & (Goods_price.price_type_guid==Region.price_type_guid) ).\
+                                filter( Supplier_price.price_type_guid == Region.price_type_guid ).\
                                 first()
             
             no_self_delivery = []
@@ -218,7 +220,7 @@ class YMLTest(unittest.TestCase):
                 print '-'*80
 
             elif item[1].status == 5 and DPD != True:
-                item_price = item[3].price_supplier
+                item_price = item[11].price_supplier
                 if int(float(price_tag.text))!= int(item_price):
                     stat+=1
                     print 'Ошибка в теге <PRICE>: Цена поставщика'

@@ -129,5 +129,12 @@ class City_price( Base ):
     city_id = Column (Integer, ForeignKey('t_cities.id'), primary_key=True)
     price_type_guid = Column( String())
 
+class Supplier_price( Base ):
+    """ Цены поставщика """
+    __tablename__='t_goods_prices_supplier'#, metadata,
+    price_type_guid=Column( String(), primary_key=True )
+    goods_id =Column(Integer, primary_key=True)
+    price_supplier=Column(Float)
+
 
         
