@@ -31,6 +31,8 @@ class Goods( Base ):
     block_id=Column( Integer, ForeignKey('t_goods_block.id') )
     overall_type=Column( Integer)
     logic_weight = Column( DECIMAL )
+    description = Column(Unicode)
+    prop_full = Column(Unicode)
 
 class Rates( Base ):
     """ Стоимость доставки в ДПД регионы """

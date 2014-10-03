@@ -179,11 +179,9 @@ class YMLTest(unittest.TestCase):
                                 join(Goods_price, (Goods.id==Goods_price.goods_id)  ).\
                                 join(Goods_section, (Goods_section.guid==Goods.section_guid)  ).\
                                 join(Goods_block, (Goods_block.id==Goods.block_id) ).\
-                                join(Supplier_price, Supplier_price.goods_id == Goods.id).\
                                 filter(Goods.id==element.attrib['id']).\
                                 filter(Region.domain==DOMAIN).\
                                 filter( (Goods_stat.city_id== Region.id) & (Goods_price.price_type_guid==Region.price_type_guid) ).\
-                                filter( Supplier_price.price_type_guid == Region.price_type_guid ).\
                                 first()
             
             no_self_delivery = []
@@ -208,10 +206,6 @@ class YMLTest(unittest.TestCase):
             item_vendor=unicode( item[0].brand ) if item[0].brand !=None else ''
             item_model= (' ' + item[0].model_name) if item[0].model_name !=None else ' '
 
-            #тег название товара <description>
-#             if description_tag.text!=item[0].name:
-#                 print 'Error:NAME:', element.attrib['id'] ,' XML:',description_tag.text, ' DB:', item[0].name
-
             #тег цена <price>
             if int(float(price_tag.text)) == 0:
                 stat+=1
@@ -220,7 +214,11 @@ class YMLTest(unittest.TestCase):
                 print '-'*80
 
             elif item[1].status == 5 and DPD != True:
-                item_price = item[11].price_supplier
+                #if sipplier status used - take supplier price from database
+                item_price = session.query(Supplier_price.price_supplier).\
+                        		   filter( (Supplier_price.goods_id == element.attrib['id']) & (Supplier_price.price_type_guid == item[3].price_type_guid) ).\
+                        		   first()[0]
+
                 if int(float(price_tag.text))!= int(item_price):
                     stat+=1
                     print 'Ошибка в теге <PRICE>: Цена поставщика'
@@ -375,6 +373,35 @@ class YMLTest(unittest.TestCase):
                 print 'Ошибка в теге <VENDOR>:'
                 print 'ID товара: ', element.attrib['id'] ,' значение в файле:', vendor_tag.text, ' значение в базе данных:', item[0].brand
                 print '-'*80
+
+            #тег <description>
+            if item[0].description != '':
+                #take lxml object to decode from html symbol codes
+                tree = fromstring(item[0].description)
+                description_string = clean_html(tree).text_content()
+                if len(description_string) > 512:
+                    description_string = description_string[:509] + '...'
+                if description_tag.text.strip() != description_string:
+                    stat+=1
+                    print 'Ошибка в теге <description>:'
+                    print 'ID товара: ', element.attrib['id']
+                    print u'\nзначение в файле:\n', description_tag.text.strip()
+                    print
+                    print u'\nзначение в базе данных:\n', description_string
+                    print '-'*80
+            else:
+                #take lxml object to clean from html tags
+                tree = fromstring(item[0].prop_full.replace('</li><li>','</li>&#32;<li>'))#need to add space html code after li
+                description_string = clean_html(tree).text_content()
+                if len(description_string) > 512:
+                    description_string = description_string[:509] + '...'
+                if description_tag.text.strip() != description_string:
+                    stat+=1
+                    print 'Ошибка в теге <description>:'
+                    print 'ID товара: ', element.attrib['id']
+                    print u'\nзначение в файле:\n', description_tag.text.strip()
+                    print u'\nзначение в базе данных:\n', description_string
+                    print '-'*80
 
             #для контекстной выгрузки
             if (model_tag )!=(item_model):
